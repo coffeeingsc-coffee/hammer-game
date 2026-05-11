@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/api/games/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/files/__e/8b6d547e-1d09-4169-8490-ec8fc81d22f4/">
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Hammer vs Water Cooler</title>
+
+  <!-- PWA: Web App Manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- PWA: Theme & Status Bar -->
+  <meta name="theme-color" content="#1a3a5c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- iOS PWA Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Smash It!" />
+  <link rel="apple-touch-icon" href="https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/c556e410-a38a-41df-85d0-552305abf77d.png" />
+
+  <!-- SEO / Social -->
+  <meta name="description" content="Smash water coolers with your hammer! Build combos across 3 rounds." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #1a1a2e;
+      overflow: hidden;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', sans-serif;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: none;
+    }
+    #game-root {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      max-height: 700px;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  <script>
+// === HAMMER VS WATER COOLER ===
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const root = document.getElementById('game-root');
+
+// Polyfill for roundRect (not supported in older browsers)
+if (!ctx.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    else if (!Array.isArray(r)) r = [0, 0, 0, 0];
+    while (r.length < 4) r = r.concat(r);
+    const [tl, tr, br, bl] = r;
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y);
+    this.quadraticCurveTo(x + w, y, x + w, y + tr);
+    this.lineTo(x + w, y + h - br);
+    this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+    this.lineTo(x + bl, y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - bl);
+    this.lineTo(x, y + tl);
+    this.quadraticCurveTo(x, y, x + tl, y);
+    this.closePath();
+    return this;
+  };
+}
+
+// Assets
+const coolerImg = new Image();
+coolerImg.src = 'https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/f99b548e-3d11-4ef7-a7aa-572f6e1ef0bb.png';
+const hammerImg = new Image();
+hammerImg.src = 'https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/a22d3019-953f-40d4-a5cf-82f8cf2354f2.png';
+
+// Audio
+function createAudio(url) {
+  const a = new Audio(url);
+  a.preload = 'auto';
+  return a;
+}
+const hitSounds = Array.from({length: 3}, () =>
+  createAudio('https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/b86c1aac-1714-4c8a-bbd2-57d41fd35d84.mp3')
+);
+const splashSounds = Array.from({length: 2}, () =>
+  createAudio('https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/fd557e8f-9096-4678-821e-4f00cb2748d9.mp3')
+);
+
+let hitSoundIdx = 0;
+let splashSoundIdx = 0;
+
+function playHit() {
+  const s = hitSounds[hitSoundIdx % hitSounds.length];
+  s.currentTime = 0;
+  s.volume = 0.6;
+  s.play().catch(()=>{});
+  hitSoundIdx++;
+}
+function playSplash() {
+  const s = splashSounds[splashSoundIdx % splashSounds.length];
+  s.currentTime = 0;
+  s.volume = 0.35;
+  s.play().catch(()=>{});
+  splashSoundIdx++;
+}
+
+// Canvas sizing
+function resize() {
+  const w = root.offsetWidth || window.innerWidth;
+  const h = root.offsetHeight || window.innerHeight;
+  canvas.width = Math.max(w, 10);
+  canvas.height = Math.max(h, 10);
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// === ASSETS ===
+const shoesImg = new Image();
+shoesImg.src = 'https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/ff30f886-71b5-4001-9eca-b620629aa36f.png';
+
+// === GAME STATE ===
+const MAX_HP = 100;
+const TOTAL_ROUNDS = 3;
+
+// IAP state (persisted in localStorage)
+let iapState = {
+  shoesOwned: localStorage.getItem('iap_shoes') === 'true',
+  shopOpen: false,
+  shopStatus: 'idle', // 'idle' | 'processing' | 'done' | 'error'
+  shopStatusTimer: 0,
+};
+
+let state = {
+  phase: 'start',
+  round: 1,
+  score: 0,
+  combo: 0,
+  maxCombo: 0,
+  coolerHP: MAX_HP,
+  coolerShake: 0,
+  coolerCracks: [],
+  particles: [],
+  waterDrops: [],
+  floatingTexts: [],
+  hammer: {
+    x: 0, y: 0,
+    angle: -0.8,
+    swinging: false,
+    swingProgress: 0,
+    pivotX: 0, pivotY: 0,
+  },
+  shoeKick: {
+    active: false,
+    progress: 0,   // 0→1 full kick arc
+    hitApplied: false,
+    startX: 0, startY: 0,
+    targetX: 0, targetY: 0,
+  },
+  mouse: { x: 200, y: 200 },
+  screenShake: { x: 0, y: 0, intensity: 0 },
+  bgBubbles: [],
+  lastTime: 0,
+};
+
+for (let i = 0; i < 12; i++) {
+  state.bgBubbles.push({
+    x: Math.random(),
+    y: Math.random(),
+    r: 3 + Math.random() * 6,
+    speed: 0.0001 + Math.random() * 0.0002,
+    alpha: 0.05 + Math.random() * 0.1,
+  });
+}
+
+// === INPUT ===
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  if (e.touches) {
+    return {
+      x: (e.touches[0].clientX - rect.left) * scaleX,
+      y: (e.touches[0].clientY - rect.top) * scaleY,
+    };
+  }
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+  };
+}
+
+canvas.addEventListener('mousemove', e => {
+  const p = getPos(e);
+  state.mouse.x = p.x;
+  state.mouse.y = p.y;
+});
+
+canvas.addEventListener('click', e => {
+  const p = getPos(e);
+  state.mouse.x = p.x;
+  state.mouse.y = p.y;
+  handleClick(p.x, p.y);
+});
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const p = getPos(e);
+  state.mouse.x = p.x;
+  state.mouse.y = p.y;
+  handleClick(p.x, p.y);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const p = getPos(e);
+  state.mouse.x = p.x;
+  state.mouse.y = p.y;
+}, { passive: false });
+
+function handleClick(x, y) {
+  // Shop modal intercepts all clicks when open
+  if (iapState.shopOpen) {
+    handleShopClick(x, y);
+    return;
+  }
+
+  // Shop button (top-right corner, always visible during game)
+  if ((state.phase === 'playing' || state.phase === 'roundEnd') && isShopBtnHit(x, y)) {
+    iapState.shopOpen = true;
+    iapState.shopStatus = 'idle';
+    return;
+  }
+
+  if (state.phase === 'start' || state.phase === 'win') {
+    startGame();
+    return;
+  }
+  if (state.phase === 'roundEnd') {
+    nextRound();
+    state.combo = 0;
+    return;
+  }
+  if (state.phase === 'playing' && !state.hammer.swinging) {
+    // Check if shoes kick button was tapped
+    if (iapState.shoesOwned && isKickBtnHit(x, y)) {
+      triggerKick();
+      return;
+    }
+    triggerSwing();
+  }
+}
+
+function isKickBtnHit(x, y) {
+  const W = canvas.width, H = canvas.height;
+  const bw = 130, bh = 48;
+  const bx = W / 2 - bw / 2;
+  const by = H * 0.88 - bh / 2;
+  return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
+}
+
+function isShopBtnHit(x, y) {
+  const W = canvas.width;
+  const bx = W - 56, by = 40, bw = 44, bh = 44;
+  return x >= bx && x <= bx + bw && y >= by - bh/2 && y <= by + bh/2;
+}
+
+function handleShopClick(x, y) {
+  const W = canvas.width, H = canvas.height;
+  // Modal dimensions
+  const mw = Math.min(W * 0.85, 340);
+  const mh = 380;
+  const mx = W/2 - mw/2;
+  const my = H/2 - mh/2;
+
+  // Close button (top-right of modal)
+  const cx = mx + mw - 20, cy = my + 20;
+  if (Math.hypot(x - cx, y - cy) < 22) {
+    iapState.shopOpen = false;
+    return;
+  }
+
+  if (iapState.shoesOwned) {
+    iapState.shopOpen = false;
+    return;
+  }
+
+  // Buy button
+  const btnY = my + mh - 70;
+  const btnW = mw * 0.7, btnH = 50;
+  const btnX = mx + mw/2 - btnW/2;
+  if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+    if (iapState.shopStatus === 'idle' || iapState.shopStatus === 'error') {
+      simulatePurchase();
+    }
+  }
+}
+
+function simulatePurchase() {
+  // In a real app (Capacitor + Google Play), you'd call:
+  //   Purchases.purchaseProduct('com.yourapp.shoes')
+  // For now we simulate the flow:
+  iapState.shopStatus = 'processing';
+  setTimeout(() => {
+    iapState.shopStatus = 'done';
+    iapState.shoesOwned = true;
+    localStorage.setItem('iap_shoes', 'true');
+    setTimeout(() => {
+      iapState.shopOpen = false;
+      iapState.shopStatus = 'idle';
+      // Celebrate!
+      const r = getCoolerRect();
+      for (let i = 0; i < 30; i++) {
+        state.particles.push({
+          x: canvas.width/2 + (Math.random()-0.5)*100,
+          y: canvas.height/2,
+          vx: (Math.random()-0.5)*8,
+          vy: -(3+Math.random()*6),
+          life: 1, decay: 0.015,
+          r: 4+Math.random()*6,
+          color: `hsl(${Math.random()*360},90%,65%)`,
+          type: 'confetti',
+        });
+      }
+    }, 1500);
+  }, 2000);
+}
+
+// === GAME LOGIC ===
+function startGame() {
+  state.phase = 'playing';
+  state.round = 1;
+  state.score = 0;
+  state.combo = 0;
+  state.maxCombo = 0;
+  state.coolerHP = MAX_HP;
+  state.coolerCracks = [];
+  state.particles = [];
+  state.waterDrops = [];
+  state.floatingTexts = [];
+}
+
+function nextRound() {
+  state.round++;
+  state.coolerHP = MAX_HP;
+  state.coolerCracks = [];
+  state.particles = [];
+  state.waterDrops = [];
+  state.phase = 'playing';
+}
+
+function getCoolerRect() {
+  const W = canvas.width, H = canvas.height;
+  const cw = Math.min(W * 0.52, 200);
+  const ch = cw * 1.6;
+  return {
+    x: W / 2 - cw / 2,
+    y: H * 0.38 - ch / 2,
+    w: cw,
+    h: ch,
+  };
+}
+
+function triggerSwing() {
+  if (state.hammer.swinging) return;
+  state.hammer.swinging = true;
+  state.hammer.swingProgress = 0;
+}
+
+function triggerKick() {
+  if (state.shoeKick.active) return;
+  const W = canvas.width, H = canvas.height;
+  const r = getCoolerRect();
+  state.shoeKick.active = true;
+  state.shoeKick.progress = 0;
+  state.shoeKick.hitApplied = false;
+  state.shoeKick.startX = W * 0.1;
+  state.shoeKick.startY = H * 0.82;
+  state.shoeKick.targetX = r.x + r.w * 0.3;
+  state.shoeKick.targetY = r.y + r.h * 0.55;
+}
+
+function applyKickHit() {
+  const baseDmg = 10 + Math.floor(Math.random() * 8);
+  // Kick always gets the +30% bonus (shoes owned)
+  const damage = Math.floor(baseDmg * 1.3);
+  state.coolerHP = Math.max(0, state.coolerHP - damage);
+  state.combo++;
+  if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+
+  const bonus = Math.min(state.combo, 10);
+  const pts = (damage + bonus * 2) * state.round;
+  state.score += pts;
+
+  const r = getCoolerRect();
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h * 0.5;
+
+  addCrack();
+  const hpFrac = state.coolerHP / MAX_HP;
+  const intensity = (1 - hpFrac) * 2 + (damage / 14) + (state.combo > 3 ? 0.5 : 0);
+  spawnWaterGush(r.x + r.w * 0.3, r.y + r.h * 0.55, Math.min(intensity, 3));
+  playSplash();
+
+  const big = state.coolerHP < 30;
+  spawnHitParticles(cx, cy, big);
+
+  state.coolerShake = big ? 20 : 12;
+  state.screenShake.intensity = big ? 10 : 5;
+
+  const comboTxt = state.combo >= 3 ? ` x${state.combo}!` : '';
+  state.floatingTexts.push({
+    x: cx + (Math.random() - 0.5) * 60,
+    y: r.y - 10,
+    text: `👟 +${pts}${comboTxt}`,
+    life: 1,
+    vy: -1.8,
+    color: '#ff9800',
+    size: state.combo >= 3 ? 24 : 20,
+  });
+
+  playHit();
+
+  if (state.coolerHP <= 0) {
+    setTimeout(() => {
+      if (state.round >= TOTAL_ROUNDS) {
+        state.phase = 'win';
+      } else {
+        state.phase = 'roundEnd';
+      }
+    }, 800);
+  }
+}
+
+function spawnHitParticles(cx, cy, big) {
+  const count = big ? 20 : 10;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = big ? (3 + Math.random() * 6) : (1.5 + Math.random() * 3);
+    state.particles.push({
+      x: cx + (Math.random() - 0.5) * 30,
+      y: cy + (Math.random() - 0.5) * 20,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.03,
+      r: 2 + Math.random() * (big ? 6 : 3),
+      color: `hsl(${200 + Math.random() * 30}, 80%, ${50 + Math.random() * 30}%)`,
+      type: 'water',
+    });
+  }
+  for (let i = 0; i < (big ? 8 : 4); i++) {
+    state.particles.push({
+      x: cx + (Math.random() - 0.5) * 20,
+      y: cy,
+      vx: (Math.random() - 0.5) * 4,
+      vy: -(2 + Math.random() * 4),
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      r: 2 + Math.random() * 4,
+      color: `hsl(${30 + Math.random() * 20}, 40%, 60%)`,
+      type: 'debris',
+    });
+  }
+}
+
+function spawnWaterGush(cx, cy, intensity) {
+  const count = Math.floor(10 + intensity * 12);
+  for (let i = 0; i < count; i++) {
+    const spreadAngle = (Math.random() - 0.5) * Math.PI * 1.4;
+    const speed = (2 + Math.random() * 5) * (0.8 + intensity * 0.4);
+    const angle = -Math.PI / 2 + spreadAngle;
+    state.waterDrops.push({
+      x: cx + (Math.random() - 0.5) * 20,
+      y: cy + (Math.random() - 0.5) * 10,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.008 + Math.random() * 0.012,
+      r: 2 + Math.random() * (3 + intensity),
+      color: `hsl(${200 + Math.random() * 20}, 90%, ${60 + Math.random() * 20}%)`,
+    });
+  }
+  if (intensity >= 2) {
+    for (let i = 0; i < 6; i++) {
+      const sideDir = i % 2 === 0 ? 1 : -1;
+      state.waterDrops.push({
+        x: cx,
+        y: cy,
+        vx: sideDir * (3 + Math.random() * 4 * intensity),
+        vy: -(6 + Math.random() * 4),
+        life: 1,
+        decay: 0.006 + Math.random() * 0.008,
+        r: 4 + Math.random() * 4,
+        color: `hsl(210, 95%, 65%)`,
+      });
+    }
+  }
+}
+
+function addCrack() {
+  const r = getCoolerRect();
+  state.coolerCracks.push({
+    x: r.x + r.w * (0.1 + Math.random() * 0.8),
+    y: r.y + r.h * (0.1 + Math.random() * 0.8),
+    len: 10 + Math.random() * 30,
+    angle: Math.random() * Math.PI,
+    branches: Math.floor(Math.random() * 3),
+  });
+}
+
+function applyHit() {
+  // Shoes give +30% damage boost!
+  const baseDmg = 8 + Math.floor(Math.random() * 6);
+  const damage = iapState.shoesOwned ? Math.floor(baseDmg * 1.3) : baseDmg;
+  state.coolerHP = Math.max(0, state.coolerHP - damage);
+  state.combo++;
+  if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+
+  const bonus = Math.min(state.combo, 10);
+  const pts = (damage + bonus * 2) * state.round;
+  state.score += pts;
+
+  const r = getCoolerRect();
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h * 0.4;
+
+  addCrack();
+
+  const hpFrac = state.coolerHP / MAX_HP;
+  const intensity = (1 - hpFrac) * 2 + (damage / 14) + (state.combo > 3 ? 0.5 : 0);
+  const tapX = r.x + r.w * 0.3;
+  const tapY = r.y + r.h * 0.6;
+  spawnWaterGush(tapX, tapY, Math.min(intensity, 3));
+  if (hpFrac < 0.7) {
+    spawnWaterGush(r.x + r.w * 0.5, r.y + r.h * 0.25, Math.min(intensity * 0.6, 2));
+  }
+  playSplash();
+
+  const big = state.coolerHP < 30;
+  spawnHitParticles(cx + (Math.random()-0.5)*r.w*0.6, cy + (Math.random()-0.5)*r.h*0.4, big);
+
+  state.coolerShake = big ? 18 : 10;
+  state.screenShake.intensity = big ? 8 : 4;
+
+  const comboTxt = state.combo >= 3 ? ` x${state.combo}!` : '';
+  state.floatingTexts.push({
+    x: cx + (Math.random()-0.5)*60,
+    y: r.y - 10,
+    text: `+${pts}${comboTxt}`,
+    life: 1,
+    vy: -1.5,
+    color: state.combo >= 5 ? '#ff6b35' : state.combo >= 3 ? '#ffd700' : '#ffffff',
+    size: state.combo >= 3 ? 22 : 18,
+  });
+
+  playHit();
+
+  if (state.coolerHP <= 0) {
+    setTimeout(() => {
+      if (state.round >= TOTAL_ROUNDS) {
+        state.phase = 'win';
+      } else {
+        state.phase = 'roundEnd';
+      }
+    }, 800);
+  }
+}
+
+// === UPDATE ===
+function update(dt) {
+  if (state.phase !== 'playing') return;
+
+  const h = state.hammer;
+  if (h.swinging) {
+    h.swingProgress += dt * 4.5;
+    if (h.swingProgress >= 1) {
+      h.swingProgress = 1;
+      h.swinging = false;
+      applyHit();
+    }
+  }
+
+  const sk = state.shoeKick;
+  if (sk.active) {
+    sk.progress += dt * 3.5;
+    // Apply hit at the midpoint (shoe reaches cooler)
+    if (sk.progress >= 0.45 && !sk.hitApplied) {
+      sk.hitApplied = true;
+      applyKickHit();
+    }
+    if (sk.progress >= 1) {
+      sk.active = false;
+      sk.progress = 0;
+    }
+  }
+
+  if (state.coolerShake > 0) state.coolerShake -= dt * 40;
+  if (state.coolerShake < 0) state.coolerShake = 0;
+
+  if (state.screenShake.intensity > 0) {
+    state.screenShake.intensity -= dt * 20;
+    state.screenShake.x = (Math.random()-0.5) * state.screenShake.intensity;
+    state.screenShake.y = (Math.random()-0.5) * state.screenShake.intensity;
+    if (state.screenShake.intensity < 0) {
+      state.screenShake.intensity = 0;
+      state.screenShake.x = 0;
+      state.screenShake.y = 0;
+    }
+  }
+
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx * dt * 60;
+    p.y += p.vy * dt * 60;
+    p.vy += 0.15 * dt * 60;
+    p.life -= p.decay * dt * 60;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  for (let i = state.waterDrops.length - 1; i >= 0; i--) {
+    const d = state.waterDrops[i];
+    d.x += d.vx * dt * 60;
+    d.y += d.vy * dt * 60;
+    d.vy += 0.2 * dt * 60;
+    d.life -= d.decay * dt * 60;
+    if (d.life <= 0) state.waterDrops.splice(i, 1);
+  }
+
+  for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+    const t = state.floatingTexts[i];
+    t.y += t.vy * dt * 60;
+    t.life -= 0.018 * dt * 60;
+    if (t.life <= 0) state.floatingTexts.splice(i, 1);
+  }
+
+  for (const b of state.bgBubbles) {
+    b.y -= b.speed * dt * 60;
+    if (b.y < -0.05) b.y = 1.05;
+  }
+}
+
+// === DRAW ===
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.translate(state.screenShake.x, state.screenShake.y);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0d1b2a');
+  grad.addColorStop(1, '#1a3a5c');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#0a2540';
+  ctx.fillRect(0, H * 0.75, W, H * 0.25);
+  ctx.fillStyle = '#0d2e4d';
+  ctx.fillRect(0, H * 0.75, W, 6);
+
+  for (const b of state.bgBubbles) {
+    ctx.beginPath();
+    ctx.arc(b.x * W, b.y * H, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(100, 200, 255, ${b.alpha})`;
+    ctx.fill();
+  }
+
+  if (state.phase === 'start') {
+    drawStartScreen(W, H);
+  } else if (state.phase === 'playing' || state.phase === 'roundEnd' || state.phase === 'win') {
+    drawGame(W, H);
+    if (state.phase === 'roundEnd') drawRoundEndOverlay(W, H);
+    if (state.phase === 'win') drawWinOverlay(W, H);
+  }
+
+  // Shop button (always on top during gameplay)
+  if (state.phase === 'playing' || state.phase === 'roundEnd') {
+    drawShopButton(W, H);
+  }
+
+  // Shop modal
+  if (iapState.shopOpen) {
+    drawShopModal(W, H);
+  }
+
+  ctx.restore();
+}
+
+function drawStartScreen(W, H) {
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${Math.floor(W * 0.1)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = '#4af';
+  ctx.shadowBlur = 20;
+  ctx.fillText('SMASH IT!', W/2, H * 0.25);
+  ctx.shadowBlur = 0;
+
+  ctx.font = `${Math.floor(W * 0.05)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#a0d8f0';
+  ctx.fillText('🔨 Hammer vs Water Cooler 💧', W/2, H * 0.33);
+
+  const r = getCoolerRect();
+  drawCooler(r, 0, []);
+
+  ctx.font = `${Math.floor(W * 0.042)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#ffffffcc';
+  ctx.fillText('Click / Tap to SMASH', W/2, H * 0.72);
+  ctx.font = `${Math.floor(W * 0.035)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#88bbdd';
+  ctx.fillText('3 coolers to destroy • Build combos for bonus points', W/2, H * 0.79);
+
+  const pulse = 0.95 + 0.05 * Math.sin(Date.now() / 300);
+  ctx.save();
+  ctx.translate(W/2, H * 0.88);
+  ctx.scale(pulse, pulse);
+  ctx.beginPath();
+  ctx.roundRect(-90, -22, 180, 44, 22);
+  ctx.fillStyle = '#2196f3';
+  ctx.fill();
+  ctx.font = `bold ${Math.floor(W * 0.055)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText('START', 0, 10);
+  ctx.restore();
+}
+
+function drawGame(W, H) {
+  const r = getCoolerRect();
+  const shake = state.coolerShake > 0 ? (Math.random()-0.5)*state.coolerShake*0.5 : 0;
+
+  if (state.coolerHP < 60) {
+    const puddle = (1 - state.coolerHP / 60);
+    const pw = r.w * (0.6 + puddle * 1.2);
+    const ph = 8 + puddle * 12;
+    const pg = ctx.createRadialGradient(r.x+r.w/2, H*0.75, 0, r.x+r.w/2, H*0.75, pw/2);
+    pg.addColorStop(0, `rgba(30, 144, 255, ${0.4 * puddle})`);
+    pg.addColorStop(1, 'rgba(30, 144, 255, 0)');
+    ctx.beginPath();
+    ctx.ellipse(r.x+r.w/2, H*0.75, pw/2, ph/2, 0, 0, Math.PI*2);
+    ctx.fillStyle = pg;
+    ctx.fill();
+  }
+
+  for (const d of state.waterDrops) {
+    ctx.globalAlpha = d.life * 0.85;
+    const speed = Math.sqrt(d.vx * d.vx + d.vy * d.vy);
+    const trailLen = Math.min(speed * 1.8, 18);
+    if (trailLen > 2) {
+      const nx = d.vx / speed;
+      const ny = d.vy / speed;
+      const grd = ctx.createLinearGradient(
+        d.x - nx * trailLen, d.y - ny * trailLen,
+        d.x, d.y
+      );
+      grd.addColorStop(0, 'rgba(100,200,255,0)');
+      grd.addColorStop(1, d.color || '#4af');
+      ctx.strokeStyle = grd;
+      ctx.lineWidth = d.r * d.life * 1.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(d.x - nx * trailLen, d.y - ny * trailLen);
+      ctx.lineTo(d.x, d.y);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r * d.life, 0, Math.PI * 2);
+    ctx.fillStyle = d.color || '#4af';
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.save();
+  ctx.translate(shake, 0);
+  drawCooler(r, state.coolerHP, state.coolerCracks);
+  ctx.restore();
+
+  for (const p of state.particles) {
+    ctx.globalAlpha = p.life;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const t of state.floatingTexts) {
+    ctx.globalAlpha = t.life;
+    ctx.font = `bold ${t.size}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = t.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  drawHammer(W, H);
+  drawShoeKick(W, H);
+  drawHUD(W, H);
+}
+
+function drawCooler(r, hp, cracks) {
+  const hpFrac = hp / MAX_HP;
+  const lean = hp <= 0 ? 0.15 : (1 - hpFrac) * 0.08;
+
+  ctx.save();
+  ctx.translate(r.x + r.w/2, r.y + r.h);
+  ctx.rotate(lean);
+  ctx.translate(-(r.x + r.w/2), -(r.y + r.h));
+
+  if (coolerImg.complete && coolerImg.naturalWidth > 0) {
+    if (hpFrac < 0.3) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalAlpha = 1;
+    }
+    ctx.drawImage(coolerImg, r.x, r.y, r.w, r.h);
+  } else {
+    drawFallbackCooler(r, hpFrac);
+  }
+
+  // Draw shoes on cooler base if owned
+  if (iapState.shoesOwned && shoesImg.complete && shoesImg.naturalWidth > 0) {
+    const sz = r.w * 0.55;
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(shoesImg, -(r.x + r.w * 0.05) - sz, r.y + r.h - sz * 0.5, sz, sz * 0.7);
+    ctx.restore();
+    ctx.drawImage(shoesImg, r.x + r.w * 0.45, r.y + r.h - sz * 0.5, sz, sz * 0.7);
+  }
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth = 1.5;
+  for (const c of cracks) {
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x + Math.cos(c.angle)*c.len, c.y + Math.sin(c.angle)*c.len);
+    ctx.stroke();
+    for (let b = 0; b < c.branches; b++) {
+      const ba = c.angle + (Math.random()-0.5)*1.2;
+      ctx.beginPath();
+      ctx.moveTo(c.x + Math.cos(c.angle)*c.len*0.5, c.y + Math.sin(c.angle)*c.len*0.5);
+      ctx.lineTo(c.x + Math.cos(ba)*c.len*0.4 + Math.cos(c.angle)*c.len*0.5,
+                 c.y + Math.sin(ba)*c.len*0.4 + Math.sin(c.angle)*c.len*0.5);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawFallbackCooler(r, hpFrac) {
+  ctx.fillStyle = hpFrac < 0.3 ? '#cc4444' : '#e0e8f0';
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + r.h*0.2, r.w, r.h*0.8, 6);
+  ctx.fill();
+  ctx.fillStyle = `rgba(30, 144, 255, ${0.3 + hpFrac * 0.5})`;
+  ctx.beginPath();
+  ctx.roundRect(r.x + r.w*0.2, r.y, r.w*0.6, r.h*0.35, 8);
+  ctx.fill();
+  ctx.fillStyle = '#4af';
+  ctx.fillRect(r.x + r.w*0.1, r.y + r.h*0.55, r.w*0.2, r.h*0.08);
+}
+
+function drawHammer(W, H) {
+  const h = state.hammer;
+  const px = state.mouse.x;
+  const py = state.mouse.y;
+
+  let angle;
+  if (h.swinging) {
+    const t = h.swingProgress;
+    if (t < 0.3) {
+      angle = -1.2 - (t / 0.3) * 0.5;
+    } else {
+      const st = (t - 0.3) / 0.7;
+      angle = -1.7 + st * 2.4;
+    }
+  } else {
+    angle = -0.9;
+  }
+
+  const armLen = Math.min(W, H) * 0.28;
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(angle);
+
+  ctx.strokeStyle = '#8B6914';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -armLen);
+  ctx.stroke();
+
+  if (hammerImg.complete && hammerImg.naturalWidth > 0) {
+    const sz = armLen * 0.7;
+    ctx.drawImage(hammerImg, -sz/2, -armLen - sz * 0.4, sz, sz);
+  } else {
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(-18, -armLen - 22, 36, 22);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(-14, -armLen - 40, 28, 20);
+  }
+
+  ctx.restore();
+}
+
+function drawShoeKick(W, H) {
+  const sk = state.shoeKick;
+  if (!sk.active) return;
+
+  // progress 0→0.45 = fly toward cooler, 0.45→1 = bounce back
+  let t = sk.progress;
+  let x, y, scale, angle;
+  if (t <= 0.45) {
+    const p = t / 0.45;
+    // ease-in toward target
+    const ep = p * p;
+    x = sk.startX + (sk.targetX - sk.startX) * ep;
+    // Arc upward slightly
+    y = sk.startY + (sk.targetY - sk.startY) * ep - Math.sin(p * Math.PI) * 40;
+    scale = 0.7 + p * 0.6;
+    angle = -0.3 + p * 0.5;
+  } else {
+    const p = (t - 0.45) / 0.55;
+    const ep = p * p;
+    x = sk.targetX + (sk.startX - sk.targetX) * ep;
+    y = sk.targetY + (sk.startY - sk.targetY) * ep - Math.sin(p * Math.PI) * 20;
+    scale = 1.3 - p * 0.6;
+    angle = 0.2 - p * 0.5;
+  }
+
+  const sz = 56 * scale;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.globalAlpha = 0.95;
+  if (shoesImg.complete && shoesImg.naturalWidth > 0) {
+    ctx.drawImage(shoesImg, -sz / 2, -sz / 2, sz, sz);
+  } else {
+    ctx.font = `${Math.round(sz)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('👟', 0, sz * 0.3);
+  }
+  // Impact flash at hit moment
+  if (sk.progress >= 0.42 && sk.progress <= 0.52) {
+    const flash = 1 - Math.abs(sk.progress - 0.45) / 0.07;
+    ctx.globalAlpha = flash * 0.7;
+    ctx.beginPath();
+    ctx.arc(0, 0, sz * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff9800';
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawHUD(W, H) {
+  const barW = W * 0.7;
+  const barH = 18;
+  const barX = W/2 - barW/2;
+  const barY = H * 0.1;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.roundRect(barX-2, barY-2, barW+4, barH+4, barH/2);
+  ctx.fill();
+
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, barH/2);
+  ctx.fill();
+
+  const frac = state.coolerHP / MAX_HP;
+  const hpColor = frac > 0.6 ? '#4caf50' : frac > 0.3 ? '#ff9800' : '#f44336';
+  const hpGrad = ctx.createLinearGradient(barX, 0, barX + barW*frac, 0);
+  hpGrad.addColorStop(0, hpColor);
+  hpGrad.addColorStop(1, hpColor + 'aa');
+  ctx.fillStyle = hpGrad;
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW * frac, barH, barH/2);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.font = `bold 11px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`${Math.ceil(state.coolerHP)} HP`, W/2, barY + 13);
+
+  ctx.textAlign = 'left';
+  ctx.font = `bold ${Math.floor(W*0.05)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#ffd700';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(`${state.score}`, 12, 28);
+  ctx.shadowBlur = 0;
+
+  ctx.textAlign = 'right';
+  ctx.font = `bold ${Math.floor(W*0.045)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`Round ${state.round}/${TOTAL_ROUNDS}`, W - 12, 28);
+
+  if (state.combo >= 2) {
+    const comboAlpha = Math.min(1, state.combo / 5);
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${Math.floor(W*0.06 + state.combo*1.5)}px 'Segoe UI', sans-serif`;
+    ctx.fillStyle = state.combo >= 5 ? `rgba(255,100,30,${comboAlpha})` : `rgba(255,215,0,${comboAlpha})`;
+    ctx.shadowColor = state.combo >= 5 ? '#ff6600' : '#ffd700';
+    ctx.shadowBlur = 10;
+    ctx.fillText(`COMBO x${state.combo}`, W/2, H * 0.88);
+    ctx.shadowBlur = 0;
+  }
+
+  if (!state.hammer.swinging && state.coolerHP > 0) {
+    const hintY = iapState.shoesOwned ? H * 0.82 : H * 0.95;
+    ctx.textAlign = 'center';
+    ctx.font = `${Math.floor(W*0.032)}px 'Segoe UI', sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(iapState.shoesOwned ? '🔨 Tap to SMASH  |  👟 Tap KICK' : 'Click / Tap to swing!', W/2, hintY);
+  }
+
+  // KICK button — only visible when shoes are owned
+  if (iapState.shoesOwned && state.coolerHP > 0) {
+    const bw = 130, bh = 48;
+    const bx = W / 2 - bw / 2;
+    const by = H * 0.88 - bh / 2;
+    const kicking = state.shoeKick.active;
+    const pulse = kicking ? 1 : 0.97 + 0.03 * Math.sin(Date.now() / 220);
+    ctx.save();
+    ctx.translate(W / 2, H * 0.88);
+    ctx.scale(pulse, pulse);
+    ctx.beginPath();
+    ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 24);
+    const kg = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
+    kg.addColorStop(0, kicking ? '#e65100' : '#f57c00');
+    kg.addColorStop(1, kicking ? '#ff6d00' : '#ffb300');
+    ctx.fillStyle = kg;
+    ctx.fill();
+    ctx.shadowColor = '#ff9800';
+    ctx.shadowBlur = kicking ? 18 : 10;
+    ctx.font = `bold ${Math.floor(W * 0.055)}px 'Segoe UI', sans-serif`;
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('👟 KICK!', 0, 17);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Shoes equipped badge
+  if (iapState.shoesOwned) {
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${Math.floor(W*0.032)}px 'Segoe UI', sans-serif`;
+    ctx.fillStyle = '#4caf50';
+    ctx.shadowColor = '#4caf50';
+    ctx.shadowBlur = 6;
+    ctx.fillText('👟 +30% DMG', 12, 50);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawRoundEndOverlay(W, H) {
+  ctx.fillStyle = 'rgba(0,0,10,0.7)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${Math.floor(W*0.11)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#4caf50';
+  ctx.shadowColor = '#4caf50';
+  ctx.shadowBlur = 20;
+  ctx.fillText('SMASHED!', W/2, H*0.36);
+  ctx.shadowBlur = 0;
+
+  ctx.font = `${Math.floor(W*0.05)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#ffd700';
+  ctx.fillText(`Score: ${state.score}`, W/2, H*0.47);
+
+  ctx.font = `${Math.floor(W*0.038)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#aaa';
+  ctx.fillText(`Max Combo: x${state.maxCombo}`, W/2, H*0.55);
+
+  const pulse = 0.95 + 0.05 * Math.sin(Date.now() / 300);
+  ctx.save();
+  ctx.translate(W/2, H*0.7);
+  ctx.scale(pulse, pulse);
+  ctx.beginPath();
+  ctx.roundRect(-100, -24, 200, 48, 24);
+  ctx.fillStyle = '#2196f3';
+  ctx.fill();
+  ctx.font = `bold ${Math.floor(W*0.055)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`Next Round →`, 0, 12);
+  ctx.restore();
+}
+
+function drawWinOverlay(W, H) {
+  ctx.fillStyle = 'rgba(0,0,10,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+
+  ctx.font = `bold ${Math.floor(W*0.1)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#ffd700';
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 30;
+  ctx.fillText('YOU WIN!', W/2, H*0.28);
+  ctx.shadowBlur = 0;
+
+  ctx.font = `${Math.floor(W*0.05)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText('All 3 coolers destroyed!', W/2, H*0.38);
+
+  ctx.font = `bold ${Math.floor(W*0.07)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#ffd700';
+  ctx.fillText(`Final Score: ${state.score}`, W/2, H*0.5);
+
+  ctx.font = `${Math.floor(W*0.042)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#aaa';
+  ctx.fillText(`Best Combo: x${state.maxCombo}`, W/2, H*0.59);
+
+  const pulse = 0.95 + 0.05 * Math.sin(Date.now() / 300);
+  ctx.save();
+  ctx.translate(W/2, H*0.73);
+  ctx.scale(pulse, pulse);
+  ctx.beginPath();
+  ctx.roundRect(-90, -24, 180, 48, 24);
+  ctx.fillStyle = '#ff9800';
+  ctx.fill();
+  ctx.font = `bold ${Math.floor(W*0.055)}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.fillText('Play Again', 0, 12);
+  ctx.restore();
+}
+
+function drawShopButton(W, H) {
+  const bx = W - 56, by = 40;
+  // Glow if shoes not owned
+  if (!iapState.shoesOwned) {
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur = 10 + 5 * Math.sin(Date.now() / 300);
+  }
+  ctx.beginPath();
+  ctx.arc(bx + 22, by, 22, 0, Math.PI * 2);
+  ctx.fillStyle = iapState.shoesOwned ? 'rgba(30,180,80,0.85)' : 'rgba(33,150,243,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = iapState.shoesOwned ? '#4caf50' : '#90caf9';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  if (shoesImg.complete && shoesImg.naturalWidth > 0) {
+    ctx.drawImage(shoesImg, bx + 5, by - 16, 34, 34);
+  } else {
+    ctx.font = '22px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('👟', bx + 22, by + 8);
+  }
+
+  if (!iapState.shoesOwned) {
+    ctx.font = 'bold 10px Segoe UI';
+    ctx.fillStyle = '#ffd700';
+    ctx.textAlign = 'center';
+    ctx.fillText('$10', bx + 22, by + 31);
+  }
+}
+
+function drawShopModal(W, H) {
+  // Backdrop
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+
+  const mw = Math.min(W * 0.85, 340);
+  const mh = 380;
+  const mx = W/2 - mw/2;
+  const my = H/2 - mh/2;
+
+  // Modal background
+  const mg = ctx.createLinearGradient(mx, my, mx, my + mh);
+  mg.addColorStop(0, '#1a2a4a');
+  mg.addColorStop(1, '#0d1a30');
+  ctx.beginPath();
+  ctx.roundRect(mx, my, mw, mh, 20);
+  ctx.fillStyle = mg;
+  ctx.fill();
+  ctx.strokeStyle = '#2196f3';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Close button
+  ctx.beginPath();
+  ctx.arc(mx + mw - 20, my + 20, 16, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fill();
+  ctx.font = 'bold 18px Segoe UI';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.fillText('✕', mx + mw - 20, my + 26);
+
+  // Title
+  ctx.font = `bold ${Math.floor(mw * 0.1)}px Segoe UI`;
+  ctx.fillStyle = '#ffd700';
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 12;
+  ctx.textAlign = 'center';
+  ctx.fillText('👟 SHOP', W/2, my + 52);
+  ctx.shadowBlur = 0;
+
+  // Shoes image
+  const imgSz = 110;
+  const imgX = W/2 - imgSz/2;
+  const imgY = my + 65;
+  if (iapState.shoesOwned) {
+    // Green glow for owned
+    ctx.shadowColor = '#4caf50';
+    ctx.shadowBlur = 20;
+  }
+  if (shoesImg.complete && shoesImg.naturalWidth > 0) {
+    ctx.drawImage(shoesImg, imgX, imgY, imgSz, imgSz);
+  } else {
+    ctx.font = '70px serif';
+    ctx.fillText('👟', W/2, imgY + 75);
+  }
+  ctx.shadowBlur = 0;
+
+  // Item name
+  ctx.font = `bold ${Math.floor(mw * 0.07)}px Segoe UI`;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText('Power Sneakers', W/2, imgY + imgSz + 26);
+
+  // Description
+  ctx.font = `${Math.floor(mw * 0.048)}px Segoe UI`;
+  ctx.fillStyle = '#90caf9';
+  ctx.fillText('+30% Damage Boost!', W/2, imgY + imgSz + 50);
+  ctx.font = `${Math.floor(mw * 0.04)}px Segoe UI`;
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('Smash harder & score more', W/2, imgY + imgSz + 70);
+
+  // Buy button area
+  const btnY = my + mh - 70;
+  const btnW = mw * 0.7, btnH = 50;
+  const btnX = mx + mw/2 - btnW/2;
+
+  if (iapState.shoesOwned) {
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, 25);
+    ctx.fillStyle = '#4caf50';
+    ctx.fill();
+    ctx.font = `bold ${Math.floor(btnW * 0.13)}px Segoe UI`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText('✓ EQUIPPED!', W/2, btnY + 34);
+  } else if (iapState.shopStatus === 'processing') {
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, 25);
+    ctx.fillStyle = '#555';
+    ctx.fill();
+    ctx.font = `bold ${Math.floor(btnW * 0.1)}px Segoe UI`;
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('Processing...', W/2, btnY + 34);
+    // Spinner
+    const ang = (Date.now() / 400) % (Math.PI * 2);
+    ctx.beginPath();
+    ctx.arc(btnX + 30, btnY + 25, 10, ang, ang + Math.PI * 1.5);
+    ctx.strokeStyle = '#2196f3';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  } else if (iapState.shopStatus === 'done') {
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, 25);
+    ctx.fillStyle = '#4caf50';
+    ctx.fill();
+    ctx.font = `bold ${Math.floor(btnW * 0.12)}px Segoe UI`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText('✓ Purchased!', W/2, btnY + 34);
+  } else {
+    // Idle buy button
+    const pulse = 0.97 + 0.03 * Math.sin(Date.now() / 250);
+    ctx.save();
+    ctx.translate(W/2, btnY + btnH/2);
+    ctx.scale(pulse, pulse);
+    ctx.beginPath();
+    ctx.roundRect(-btnW/2, -btnH/2, btnW, btnH, 25);
+    const bg = ctx.createLinearGradient(-btnW/2, 0, btnW/2, 0);
+    bg.addColorStop(0, '#1976d2');
+    bg.addColorStop(1, '#42a5f5');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.shadowColor = '#2196f3';
+    ctx.shadowBlur = 14;
+    ctx.font = `bold ${Math.floor(btnW * 0.13)}px Segoe UI`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText('BUY  $10.00', 0, 17);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+}
+
+// === LOOP ===
+function loop(ts) {
+  const dt = Math.min((ts - state.lastTime) / 1000, 0.05);
+  state.lastTime = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  requestAnimationFrame(ts => {
+    state.lastTime = ts;
+    requestAnimationFrame(loop);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startLoop);
+} else {
+  startLoop();
+}
+
+// === SERVICE WORKER (PWA) ===
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+  </script>
+</body>
+</html>

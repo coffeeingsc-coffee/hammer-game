@@ -1,0 +1,25 @@
+{
+  "name": "Hammer vs Water Cooler",
+  "short_name": "Smash It!",
+  "description": "Smash water coolers with your hammer! Build combos across 3 rounds.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a3a5c",
+  "categories": ["games"],
+  "icons": [
+    {
+      "src": "https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/c556e410-a38a-41df-85d0-552305abf77d.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://vtelpopqybfytrgzkomj.supabase.co/storage/v1/object/public/game-assets/public/f973aa4a-b4d3-4deb-a18a-8ac275edda9d/82c00055-2cbc-40d1-a4e3-fec3ea10ff7e/c556e410-a38a-41df-85d0-552305abf77d.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
